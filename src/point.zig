@@ -1,1 +1,1 @@
-pub const FPoint = struct { f64, f64 };
+pub const FPoint = struct { x: f64, y: f64 };

@@ -7,11 +7,8 @@ const FPoint = @import("./point.zig").FPoint;
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 32;
 
-const MAT_A: f64 = TILE_WIDTH / 2;
-const MAT_B: f64 = -TILE_WIDTH / 2;
-const MAT_C: f64 = TILE_HEIGHT / 2;
-const MAT_D: f64 = TILE_HEIGHT / 2;
-const DETERMINANT: f64 = 1 / (MAT_A * MAT_D - MAT_B * MAT_C);
+const TILE_WIDTH_HALF = TILE_WIDTH / 2;
+const TILE_HEIGHT_HALF = TILE_HEIGHT / 2;
 
 const TEXTURE_PATH = "./graphics/tiles.png";
 const TILES_ON_TEXTURE_X = 8;
@@ -39,23 +36,17 @@ pub const TileMap = struct {
         c.SDL_DestroyTexture(self.sdl_texture);
     }
 
-    pub fn screen_to_grid_corrds(
-        x_screen: f64,
-        y_screen: f64,
-    ) FPoint {
+    pub fn grid_coords_from_screen(screen: FPoint, zoom_factor: f64) FPoint {
         return FPoint{
-            ((y_screen + (x_screen / 2))) / TILE_WIDTH,
-            ((y_screen - (x_screen / 2))) / TILE_HEIGHT,
+            .x = ((screen.x / TILE_WIDTH_HALF + screen.y / TILE_HEIGHT_HALF) / 2) * zoom_factor,
+            .y = ((screen.y / TILE_HEIGHT_HALF - screen.x / TILE_WIDTH_HALF) / 2) * zoom_factor,
         };
     }
 
-    pub fn grid_to_screen_coords(
-        x_grid: f64,
-        y_grid: f64,
-    ) FPoint {
+    pub fn screen_coords_from_grid(grid: FPoint, zoom_factor: f64) FPoint {
         return FPoint{
-            (x_grid - y_grid) * (TILE_WIDTH / 2) - (TILE_WIDTH / 2),
-            (x_grid + y_grid) * (TILE_HEIGHT / 2) - (TILE_HEIGHT / 2),
+            .x = ((grid.x - grid.y) * TILE_WIDTH_HALF - TILE_WIDTH_HALF) * zoom_factor,
+            .y = ((grid.x + grid.y) * TILE_HEIGHT_HALF - TILE_HEIGHT_HALF) * zoom_factor,
         };
     }
 
@@ -65,27 +56,32 @@ pub const TileMap = struct {
         tile_id: u8,
         x_coord: c_int,
         y_coord: c_int,
-        x_screen_scroll: f64,
-        y_screen_scroll: f64,
+        scroll: FPoint,
+        zoom_factor: f64,
     ) void {
-        const tile_x: c_int = (tile_id / TILES_ON_TEXTURE_X) * TILE_WIDTH;
-        const tile_y: c_int = (tile_id % TILES_ON_TEXTURE_Y) * TILE_HEIGHT;
+        const texture_x: c_int = (tile_id / TILES_ON_TEXTURE_X) * TILE_WIDTH;
+        const texture_y: c_int = (tile_id % TILES_ON_TEXTURE_Y) * TILE_HEIGHT;
         const source_rect = c.SDL_Rect{
             .w = TILE_WIDTH,
             .h = TILE_HEIGHT,
-            .x = tile_x,
-            .y = tile_y,
+            .x = texture_x,
+            .y = texture_y,
         };
 
-        const screen = TileMap.grid_to_screen_coords(
-            @floatFromInt(x_coord),
-            @floatFromInt(y_coord),
+        const screen = TileMap.screen_coords_from_grid(
+            FPoint{ .x = @floatFromInt(x_coord), .y = @floatFromInt(y_coord) },
+            zoom_factor,
         );
+
+        const tile_width: c_int = @intFromFloat(TILE_WIDTH * zoom_factor);
+        const tile_height: c_int = @intFromFloat(TILE_HEIGHT * zoom_factor);
+        const x: c_int = @intFromFloat((screen.x + scroll.x) * zoom_factor);
+        const y: c_int = @intFromFloat((screen.y + scroll.y) * zoom_factor);
         const dest_rect = c.SDL_Rect{
-            .w = TILE_WIDTH,
-            .h = TILE_HEIGHT,
-            .x = @intFromFloat(screen[0] + x_screen_scroll),
-            .y = @intFromFloat(screen[1] + y_screen_scroll),
+            .w = tile_width,
+            .h = tile_height,
+            .x = x,
+            .y = y,
         };
         _ = c.SDL_RenderCopy(
             renderer,
