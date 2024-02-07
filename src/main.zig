@@ -14,6 +14,8 @@ const WINDOW_HEIGHT = 600;
 const MIN_ZOOM = 1.0;
 const MAX_ZOOM = std.math.pow(f64, 2.0, 3);
 
+const IDEAL_FRAME_TIME: f64 = 1000 / 60;
+
 pub fn render_map(
     game: *Game,
     pan: FPoint,
@@ -21,7 +23,7 @@ pub fn render_map(
 ) void {
     for (map, 0..) |row, i| {
         for (row, 0..) |cell, j| {
-            game.tile_map.render(0, cell, @intCast(i), @intCast(j), pan);
+            game.tile_map.render(0, cell, false, @intCast(i), @intCast(j), pan);
         }
     }
 }
@@ -116,16 +118,25 @@ pub fn main() !void {
         .facing_left = true,
         .start_id = 5,
         .frames = 2,
-        .animation = 0,
         .grid_pos = CIPoint{ .x = 0, .y = 0 },
-        .grid_delta = FPoint{ .x = 0.0, .y = 0.0 },
+        .animation_time = 1.0 / 4.0,
     };
 
     var mouse_pressed = false;
     var mouse_pos = FPoint{ .x = 0, .y = 0 };
     var trap_mouse = false;
 
+    var now: u64 = 0;
+    var last: u64 = c.SDL_GetPerformanceCounter();
+    var delta_time: f64 = 0;
+    var fps: f64 = 0.0;
+
     while (!quit) {
+        now = c.SDL_GetPerformanceCounter();
+        delta_time = @as(f64, @floatFromInt(now - last)) / @as(f64, @floatFromInt(c.SDL_GetPerformanceFrequency()));
+        fps = 1.0 / delta_time;
+        last = now;
+
         var event: c.SDL_Event = undefined;
 
         if (trap_mouse) {
@@ -150,19 +161,19 @@ pub fn main() !void {
                     c.SDLK_DOWN => pan.y -= PAN_SPEED,
                     c.SDLK_d => {
                         kirby.grid_pos.x += 1;
-                        kirby.advance_animation();
+                        kirby.facing_left = false;
                     },
                     c.SDLK_a => {
                         kirby.grid_pos.x -= 1;
-                        kirby.advance_animation();
+                        kirby.facing_left = true;
                     },
                     c.SDLK_w => {
                         kirby.grid_pos.y += 1;
-                        kirby.advance_animation();
+                        kirby.facing_left = true;
                     },
                     c.SDLK_s => {
                         kirby.grid_pos.y -= 1;
-                        kirby.advance_animation();
+                        kirby.facing_left = true;
                     },
                     c.SDLK_0 => reset_panning(&pan),
                     else => {},
@@ -194,6 +205,8 @@ pub fn main() !void {
             }
         }
 
+        kirby.animate(delta_time);
+
         _ = c.SDL_SetRenderDrawColor(game.renderer, 0x20, 0x18, 0x18, 255);
         _ = c.SDL_RenderClear(game.renderer);
 
@@ -204,21 +217,17 @@ pub fn main() !void {
         const grid_pos = TileMap.grid_coords_from_screen(FPoint{ .x = (mouse_pos.x / zoom) - pan.x, .y = (mouse_pos.y / zoom) - pan.y });
         const x: c_int = @intFromFloat(std.math.round(grid_pos.x));
         const y: c_int = @intFromFloat(std.math.round(grid_pos.y));
-        game.tile_map.render(0, 3, x, y, pan);
+        game.tile_map.render(0, 3, false, x, y, pan);
         if (mouse_pressed and x >= 0 and x < map.len and y >= 0 and y < map.len) {
             map[@intCast(x)][@intCast(y)] = (map[@intCast(x)][@intCast(y)] + 1) % 5;
         }
 
-        game.tile_map.render_character(&kirby, pan);
+        game.tile_map.render_character(&kirby, pan, kirby.facing_left);
 
         const str: []const u8 = try std.fmt.allocPrint(
             allocator,
-            "Kirby Pos: ({d}, {d}) {d} Kirby animation",
-            .{
-                kirby.grid_pos.x,
-                kirby.grid_pos.y,
-                kirby.animation,
-            },
+            "Delta time: {d:.3} FPS: {d:.3} {}",
+            .{ delta_time, fps, kirby.facing_left },
         );
         const text_surface = c.TTF_RenderText_Solid(
             game.font,
@@ -243,6 +252,7 @@ pub fn main() !void {
 
         c.SDL_RenderPresent(game.renderer);
 
-        c.SDL_Delay(1000 / 60);
+        const delay: f64 = std.math.round(IDEAL_FRAME_TIME - delta_time);
+        c.SDL_Delay(@intFromFloat(delay));
     }
 }

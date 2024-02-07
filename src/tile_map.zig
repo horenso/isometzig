@@ -23,11 +23,22 @@ pub const Character = struct {
     start_id: u8,
     frames: u8,
     grid_pos: CIPoint,
-    animation: u8,
-    grid_delta: FPoint,
+    animation_time: f64,
+    elapsed_time_since_animated: f64 = 0,
+    current_animation_frame: u8 = 0,
+    grid_delta: FPoint = FPoint{ .x = 0.0, .y = 0.0 },
+    play_animation: bool = false,
 
     pub fn advance_animation(self: *Character) void {
-        self.*.animation = (self.*.animation + 1) % self.frames;
+        self.*.current_animation_frame = (self.*.current_animation_frame + 1) % self.frames;
+    }
+
+    pub fn animate(self: *Character, delta_time: f64) void {
+        self.elapsed_time_since_animated += delta_time;
+        if (self.elapsed_time_since_animated >= self.animation_time) {
+            self.advance_animation();
+            self.elapsed_time_since_animated = 0.0;
+        }
     }
 };
 
@@ -73,10 +84,12 @@ pub const TileMap = struct {
         self: *TileMap,
         character: *Character,
         pan: FPoint,
+        flipped: bool,
     ) void {
         self.render(
-            character.animation,
+            character.current_animation_frame,
             character.start_id,
+            flipped,
             character.grid_pos.x,
             character.grid_pos.y,
             pan,
@@ -87,6 +100,7 @@ pub const TileMap = struct {
         self: *TileMap,
         tile_x: u8,
         tile_y: u8,
+        mirrored: bool,
         x_coord: c_int,
         y_coord: c_int,
         pan: FPoint,
@@ -97,13 +111,14 @@ pub const TileMap = struct {
         });
         screen_pos.x += pan.x;
         screen_pos.y += pan.y;
-        self.render_from_screenspace(tile_x, tile_y, screen_pos);
+        self.render_from_screenspace(tile_x, tile_y, mirrored, screen_pos);
     }
 
     fn render_from_screenspace(
         self: *TileMap,
         tile_x: u8,
         tile_y: u8,
+        mirrored: bool,
         screen_pos: FPoint,
     ) void {
         const source_rect = c.SDL_Rect{
@@ -118,11 +133,14 @@ pub const TileMap = struct {
             .x = @intFromFloat(screen_pos.x),
             .y = @intFromFloat(screen_pos.y),
         };
-        _ = c.SDL_RenderCopy(
+        _ = c.SDL_RenderCopyEx(
             self.renderer,
             self.sdl_texture,
             &source_rect,
             &dest_rect,
+            0,
+            null,
+            if (mirrored) c.SDL_TRUE else c.SDL_FALSE,
         );
     }
 };
