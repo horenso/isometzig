@@ -1,7 +1,9 @@
 const std = @import("std");
 const Game = @import("./game.zig").Game;
 const c = @import("./sdl.zig").SDL;
-const TileMap = @import("./tile_map.zig").TileMap;
+const tile_map = @import("./tile_map.zig");
+const TileMap = tile_map.TileMap;
+const Character = tile_map.Character;
 const point = @import("./point.zig");
 const FPoint = point.FPoint;
 const CIPoint = point.CIPoint;
@@ -19,7 +21,7 @@ pub fn render_map(
 ) void {
     for (map, 0..) |row, i| {
         for (row, 0..) |cell, j| {
-            game.tile_map.render(game.renderer, cell, @intCast(i), @intCast(j), pan);
+            game.tile_map.render(0, cell, @intCast(i), @intCast(j), pan);
         }
     }
 }
@@ -110,6 +112,14 @@ pub fn main() !void {
     reset_panning(&pan);
     var zoom: f64 = 1.0;
 
+    var kirby = Character{
+        .facing_left = true,
+        .start_id = 5,
+        .frames = 2,
+        .animation = 0,
+        .pos = CIPoint{ .x = 0, .y = 0 },
+    };
+
     var mouse_pressed = false;
     var mouse_pos = FPoint{ .x = 0, .y = 0 };
     var trap_mouse = false;
@@ -137,6 +147,22 @@ pub fn main() !void {
                     c.SDLK_RIGHT => pan.x -= PAN_SPEED,
                     c.SDLK_UP => pan.y += PAN_SPEED,
                     c.SDLK_DOWN => pan.y -= PAN_SPEED,
+                    c.SDLK_d => {
+                        kirby.pos.x += 1;
+                        kirby.advance_animation();
+                    },
+                    c.SDLK_a => {
+                        kirby.pos.x -= 1;
+                        kirby.advance_animation();
+                    },
+                    c.SDLK_w => {
+                        kirby.pos.y += 1;
+                        kirby.advance_animation();
+                    },
+                    c.SDLK_s => {
+                        kirby.pos.y -= 1;
+                        kirby.advance_animation();
+                    },
                     c.SDLK_0 => reset_panning(&pan),
                     else => {},
                 },
@@ -177,20 +203,20 @@ pub fn main() !void {
         const grid_pos = TileMap.grid_coords_from_screen(FPoint{ .x = (mouse_pos.x / zoom) - pan.x, .y = (mouse_pos.y / zoom) - pan.y });
         const x: c_int = @intFromFloat(std.math.round(grid_pos.x));
         const y: c_int = @intFromFloat(std.math.round(grid_pos.y));
-        game.tile_map.render(game.renderer, 3, x, y, pan);
+        game.tile_map.render(0, 3, x, y, pan);
         if (mouse_pressed and x >= 0 and x < map.len and y >= 0 and y < map.len) {
             map[@intCast(x)][@intCast(y)] = (map[@intCast(x)][@intCast(y)] + 1) % 5;
         }
 
+        game.tile_map.render_character(&kirby, pan);
+
         const str: []const u8 = try std.fmt.allocPrint(
             allocator,
-            "Pan: ({d}, {d}) MWS: ({d}, {d}) Zoom: {d}",
+            "Kirby Pos: ({d}, {d}) {d} Kirby animation",
             .{
-                pan.x,
-                pan.y,
-                mouse_pos.x / zoom - pan.x,
-                mouse_pos.y / zoom - pan.y,
-                zoom,
+                kirby.pos.x,
+                kirby.pos.y,
+                kirby.animation,
             },
         );
         const text_surface = c.TTF_RenderText_Solid(

@@ -2,7 +2,9 @@ const std = @import("std");
 const math = std.math;
 const Game = @import("./game.zig").Game;
 const c = @import("./sdl.zig").SDL;
-const FPoint = @import("./point.zig").FPoint;
+const point = @import("./point.zig");
+const FPoint = point.FPoint;
+const CIPoint = point.CIPoint;
 
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 32;
@@ -16,7 +18,20 @@ const TILES_ON_TEXTURE_Y = 16;
 
 const TileMapError = error{SDLResourceLoadingFailed};
 
+pub const Character = struct {
+    facing_left: bool,
+    start_id: u8,
+    frames: u8,
+    pos: CIPoint,
+    animation: u8,
+
+    pub fn advance_animation(self: *Character) void {
+        self.*.animation = (self.animation + 1) % self.frames;
+    }
+};
+
 pub const TileMap = struct {
+    renderer: *c.SDL_Renderer, // weak
     sdl_texture: *c.SDL_Texture,
 
     pub fn init(
@@ -30,6 +45,7 @@ pub const TileMap = struct {
         _ = c.SDL_SetTextureBlendMode(sdl_texture, c.SDL_BLENDMODE_BLEND);
 
         return TileMap{
+            .renderer = renderer,
             .sdl_texture = sdl_texture,
         };
     }
@@ -52,21 +68,27 @@ pub const TileMap = struct {
         };
     }
 
+    pub fn render_character(
+        self: *TileMap,
+        character: *Character,
+        pan: FPoint,
+    ) void {
+        self.render(character.animation, character.start_id, character.pos.x, character.pos.y, pan);
+    }
+
     pub fn render(
         self: *TileMap,
-        renderer: *c.SDL_Renderer,
-        tile_id: u8,
+        tile_x: u8,
+        tile_y: u8,
         x_coord: c_int,
         y_coord: c_int,
-        scroll: FPoint,
+        pan: FPoint,
     ) void {
-        const texture_x: c_int = (tile_id / TILES_ON_TEXTURE_X) * TILE_WIDTH;
-        const texture_y: c_int = (tile_id % TILES_ON_TEXTURE_Y) * TILE_HEIGHT;
         const source_rect = c.SDL_Rect{
             .w = TILE_WIDTH,
             .h = TILE_HEIGHT,
-            .x = texture_x,
-            .y = texture_y,
+            .x = tile_x * TILE_WIDTH,
+            .y = tile_y * TILE_HEIGHT,
         };
 
         const screen = TileMap.screen_coords_from_grid(
@@ -75,8 +97,8 @@ pub const TileMap = struct {
 
         const tile_width: c_int = @intFromFloat(TILE_WIDTH);
         const tile_height: c_int = @intFromFloat(TILE_HEIGHT);
-        const x: c_int = @intFromFloat((screen.x + scroll.x));
-        const y: c_int = @intFromFloat((screen.y + scroll.y));
+        const x: c_int = @intFromFloat((screen.x + pan.x));
+        const y: c_int = @intFromFloat((screen.y + pan.y));
         const dest_rect = c.SDL_Rect{
             .w = tile_width,
             .h = tile_height,
@@ -84,7 +106,7 @@ pub const TileMap = struct {
             .y = y,
         };
         _ = c.SDL_RenderCopy(
-            renderer,
+            self.renderer,
             self.sdl_texture,
             &source_rect,
             &dest_rect,
