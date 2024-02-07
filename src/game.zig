@@ -15,7 +15,7 @@ pub const Game = struct {
     tile_map: TileMap,
 
     pub fn init() GameInitError!Game {
-        if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
+        if (c.SDL_Init(c.SDL_INIT_VIDEO | c.SDL_INIT_TIMER) < 0) {
             c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
             return GameInitError.SDLInitializationFailed;
         }

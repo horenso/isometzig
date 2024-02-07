@@ -117,7 +117,8 @@ pub fn main() !void {
         .start_id = 5,
         .frames = 2,
         .animation = 0,
-        .pos = CIPoint{ .x = 0, .y = 0 },
+        .grid_pos = CIPoint{ .x = 0, .y = 0 },
+        .grid_delta = FPoint{ .x = 0.0, .y = 0.0 },
     };
 
     var mouse_pressed = false;
@@ -148,19 +149,19 @@ pub fn main() !void {
                     c.SDLK_UP => pan.y += PAN_SPEED,
                     c.SDLK_DOWN => pan.y -= PAN_SPEED,
                     c.SDLK_d => {
-                        kirby.pos.x += 1;
+                        kirby.grid_pos.x += 1;
                         kirby.advance_animation();
                     },
                     c.SDLK_a => {
-                        kirby.pos.x -= 1;
+                        kirby.grid_pos.x -= 1;
                         kirby.advance_animation();
                     },
                     c.SDLK_w => {
-                        kirby.pos.y += 1;
+                        kirby.grid_pos.y += 1;
                         kirby.advance_animation();
                     },
                     c.SDLK_s => {
-                        kirby.pos.y -= 1;
+                        kirby.grid_pos.y -= 1;
                         kirby.advance_animation();
                     },
                     c.SDLK_0 => reset_panning(&pan),
@@ -214,8 +215,8 @@ pub fn main() !void {
             allocator,
             "Kirby Pos: ({d}, {d}) {d} Kirby animation",
             .{
-                kirby.pos.x,
-                kirby.pos.y,
+                kirby.grid_pos.x,
+                kirby.grid_pos.y,
                 kirby.animation,
             },
         );

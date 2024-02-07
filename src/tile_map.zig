@@ -22,11 +22,12 @@ pub const Character = struct {
     facing_left: bool,
     start_id: u8,
     frames: u8,
-    pos: CIPoint,
+    grid_pos: CIPoint,
     animation: u8,
+    grid_delta: FPoint,
 
     pub fn advance_animation(self: *Character) void {
-        self.*.animation = (self.animation + 1) % self.frames;
+        self.*.animation = (self.*.animation + 1) % self.frames;
     }
 };
 
@@ -73,7 +74,13 @@ pub const TileMap = struct {
         character: *Character,
         pan: FPoint,
     ) void {
-        self.render(character.animation, character.start_id, character.pos.x, character.pos.y, pan);
+        self.render(
+            character.animation,
+            character.start_id,
+            character.grid_pos.x,
+            character.grid_pos.y,
+            pan,
+        );
     }
 
     pub fn render(
@@ -84,26 +91,32 @@ pub const TileMap = struct {
         y_coord: c_int,
         pan: FPoint,
     ) void {
+        var screen_pos = TileMap.screen_coords_from_grid(FPoint{
+            .x = @as(f64, @floatFromInt(x_coord)),
+            .y = @as(f64, @floatFromInt(y_coord)),
+        });
+        screen_pos.x += pan.x;
+        screen_pos.y += pan.y;
+        self.render_from_screenspace(tile_x, tile_y, screen_pos);
+    }
+
+    fn render_from_screenspace(
+        self: *TileMap,
+        tile_x: u8,
+        tile_y: u8,
+        screen_pos: FPoint,
+    ) void {
         const source_rect = c.SDL_Rect{
             .w = TILE_WIDTH,
             .h = TILE_HEIGHT,
             .x = tile_x * TILE_WIDTH,
             .y = tile_y * TILE_HEIGHT,
         };
-
-        const screen = TileMap.screen_coords_from_grid(
-            FPoint{ .x = @floatFromInt(x_coord), .y = @floatFromInt(y_coord) },
-        );
-
-        const tile_width: c_int = @intFromFloat(TILE_WIDTH);
-        const tile_height: c_int = @intFromFloat(TILE_HEIGHT);
-        const x: c_int = @intFromFloat((screen.x + pan.x));
-        const y: c_int = @intFromFloat((screen.y + pan.y));
         const dest_rect = c.SDL_Rect{
-            .w = tile_width,
-            .h = tile_height,
-            .x = x,
-            .y = y,
+            .w = @intFromFloat(TILE_WIDTH),
+            .h = @intFromFloat(TILE_HEIGHT),
+            .x = @intFromFloat(screen_pos.x),
+            .y = @intFromFloat(screen_pos.y),
         };
         _ = c.SDL_RenderCopy(
             self.renderer,
